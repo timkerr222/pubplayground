@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paste Cells</title>
+<style>
+    /* Styling for the container */
+    #container, #filterContainer {
+        width: 100%;
+        max-width: 800px;
+        margin: 20px auto;
+        border: 1px solid #ccc;
+        padding: 10px;
+        white-space: pre;
+    }
+    /* Styling for the table */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th, td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+</style>
+</head>
+<body>
+
+<div id="container" contenteditable="true" placeholder="Paste cells here"></div>
+
+<label for="hasHeaders">Data has headers:</label>
+<input type="checkbox" id="hasHeaders" onclick="hasHeaders()">
+
+<div id="filterContainer">
+    <select id="columnSelect">
+        <!-- Column options will be added dynamically -->
+    </select>
+    <select id="conditionSelect">
+        <option value="contains">Contains</option>
+        <option value="doesNotContain">Does Not Contain</option>
+        <option value="equals">Equals</option>
+        <option value="notEqual">Not Equal</option>
+        <option value="isNull">Is Null</option>
+        <option value="isNotNull">Is Not Null</option>
+    </select>
+    <input type="text" id="valueInput" placeholder="Enter value to filter...">
+    <button onclick="applyFilter()">Apply Filter</button>
+</div>
+
+<table id="parsedTable">
+    <thead>
+        <tr>
+            <!-- Header cells will be dynamically inserted here -->
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Data rows will be dynamically inserted here -->
+    </tbody>
+</table>
+
+<script>
+    function hasHeaders(){
+        var h = document.getElementById("hasHeaders");
+        if(h.checked == true){
+            var headerRows = document.querySelectorAll('#parsedTable thead tr');
+            var headerCells = headerRows[0].querySelectorAll("th");
+            var rows = document.querySelectorAll("#parsedTable tbody tr");
+            var realheader = rows[0];
+            var cells = realheader.querySelectorAll('td');
+
+            for(var i = 0; i < cells.length; i++){
+                console.log(headerCells);
+                var spandiv = document.createElement('div')
+                spandiv.innerText = cells[i].innerText;
+                spandiv.classList = ["thisthat"];
+                headerCells[i].appendChild(spandiv);
+            }
+            rows[0].remove()
+
+        }
+        else{
+
+        }
+        console.log(h.checked);
+    }
+        
+    function parsePastedData(pastedData) {
+            var table = document.getElementById('parsedTable');
+            table.innerHTML = ''; // Clear previous table contents
+
+            var thead = document.createElement('thead');
+            var tbody = document.createElement('tbody');
+            var headerRow = document.createElement('tr');
+
+            // Assuming first row of pasted data are headers
+            var headers = pastedData.trim().split('\n')[0].split('\t');
+
+
+            for(var i = 0; i < headers.length; i++) {
+                var th = document.createElement('th');
+                th.textContent = `Column_${i}`;
+
+                // Append select dropdown for transformations
+                var select = createSelectDropdown(i);
+                th.appendChild(select); // Append the select element to the header cell
+
+                headerRow.appendChild(th);
+            }
+
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+            table.appendChild(tbody);
+
+            // Handle data rows
+            var dataRows = pastedData.trim().split('\n');
+            dataRows.forEach(function(row) {
+                var tr = document.createElement('tr');
+                row.split('\t').forEach(function(cell) {
+                    var td = document.createElement('td');
+                    td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+
+    
+    // Function to split cells into two unique columns
+        function splitCells(columnIndex, delimiter) {
+            var rows = document.querySelectorAll('#parsedTable tbody tr');
+            var newHeaderCell1 = document.createElement('th');
+            var newHeaderCell2 = document.createElement('th');
+            newHeaderCell1.innerText = `Column_${columnIndex + 1}_1`; // Incrementing columnIndex by 1 to match the one-based indexing
+            newHeaderCell2.innerText = `Column_${columnIndex + 1}_2`; // Incrementing columnIndex by 1 to match the one-based indexing
+
+            // Create select dropdown for first new header cell
+            var select1 = createSelectDropdown(columnIndex);
+            newHeaderCell1.appendChild(select1);
+
+            // Create select dropdown for second new header cell
+            var select2 = createSelectDropdown(columnIndex);
+            newHeaderCell2.appendChild(select2);
+
+            var header = rows[0];
+            header.appendChild(newHeaderCell1);
+            header.appendChild(newHeaderCell2);
+
+            // Start iterating from the second row onwards
+            for (var i = 1; i < rows.length; i++) {
+                var row = rows[i];
+                var cells = row.querySelectorAll('td');
+                if (cells.length > columnIndex) {
+                    var text = cells[columnIndex].textContent;
+                    var parts = text.split(delimiter);
+                    //cells[columnIndex].textContent = parts[0]; // Update existing cell with the first part
+                    for (var j = 0; j < 2; j++) {
+                        // Create a new cell for each remaining part
+                        var newCell = document.createElement('td');
+                        newCell.textContent = parts[j];
+                        row.appendChild(newCell);
+                    }
+                }
+            }
+        }
+
+        // Function to create select dropdown for transformation options
+        function createSelectDropdown(columnIndex) {
+            var select = document.createElement('select');
+            select.innerHTML = `
+                <option value="none">Select Transformation</option>
+                <option value="split">Split Cells</option>
+                <option value="pad">Pad Cells</option>
+                <option value="ndc">Format Drug NDC</option>
+                <option value="getndcbrand">Get NDC Brand Indicator</option>
+                <option value="classify">Classify Data</option>
+            `;
+            select.addEventListener('change', function () {
+                // Handle change event based on selected transformation type
+                var selectedOption = this.value;
+                if (selectedOption === 'getndcbrand'){
+                    handleNdcDetails(columnIndex);
+                }
+                else if (selectedOption === 'split') {
+                    // Implement logic for splitting cells
+                    var delimiter = prompt("Enter the delimiter to split cells (e.g., ','):");
+                    if (delimiter) {
+                        splitCells(columnIndex, delimiter);
+                    }
+                } else if (selectedOption === 'pad') {
+                    // Implement logic for padding cells
+                    var paddingChar = prompt("Enter the padding character:");
+                    var maxLength = parseInt(prompt("Enter the desired maximum length of the column:"));
+                    if (!isNaN(maxLength) && maxLength > 0) {
+                        padCells(columnIndex, paddingChar, maxLength);
+                    }
+                } 
+                else if (selectedOption === 'ndc') {
+                    // Implement logic for padding cells
+                    padCells(columnIndex, "0", 11);
+                } 
+                else if (selectedOption === 'classify') {
+                    // Implement logic for classifying data
+                    classifyData(columnIndex);
+                }
+            });
+            return select;
+        }
+
+
+
+
+    // Function to pad cells
+    function padCells(columnIndex, paddingChar, maxLength) {
+        var rows = document.querySelectorAll('#parsedTable tbody tr');
+        console.log(rows)
+        // td:nth-child(' + (columnIndex + 1) + ')');
+        for(var i = 1; i < rows.length; i++){
+           
+            var cells = rows[i].querySelectorAll("td");
+            var targetCell = cells[columnIndex];
+            console.log(targetCell)
+            var text = targetCell.textContent.trimEnd().trimLeft();
+            console.log("text is", text);
+            if (text.length < maxLength) {
+                targetCell.innerText = text.padStart(maxLength, paddingChar);
+            }
+        }
+        
+    }
+
+    // Function to classify data
+    function classifyData(columnIndex) {
+        var cells = document.querySelectorAll('#parsedTable tbody tr td:nth-child(' + (columnIndex + 1) + ')');
+        cells.forEach(function (cell) {
+            var text = cell.textContent.toLowerCase();
+            if (text.includes('person')) {
+                cell.textContent = 'Person';
+            } else if (text.includes('drug')) {
+                cell.textContent = 'Drug';
+            } else if (text.includes('doctor')) {
+                cell.textContent = 'Doctor';
+            } else {
+                cell.textContent = 'Unknown';
+            }
+        });
+    }
+
+    async function getNdcDetails(ndc) {
+        const url = `https://rxnav.nlm.nih.gov/REST/relatedndc.json?relation=product&ndc=${ndc}`;
+        let outputFlag = '';
+        let outputName = '';
+        let rxCui = '';  // Ensure this variable is declared
+        let status = false;
+
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.1.2222.33 Safari/537.36",
+                    "Accept-Encoding": "*",
+                    "Connection": "keep-alive"
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.ndcInfoList && data.ndcInfoList.ndcInfo && data.ndcInfoList.ndcInfo.length > 0) {
+                const ndcInfo = data.ndcInfoList.ndcInfo[0];
+                const outputType = ndcInfo.tty;
+                outputName = ndcInfo.conceptName;
+                rxCui = ndcInfo.rxcui;
+
+                console.log(`NDC is a ${outputType}`);
+                if (outputType === 'GPCK' || outputType === 'SCD') {
+                    outputFlag = 'N';
+                }
+                if (outputType === 'BPCK' || outputType === 'SBD') {
+                    outputFlag = 'Y';
+                }
+
+                status = true;
+            }
+        } catch (error) {
+            console.error("Error in NDC registry: ", error);
+            status = false;
+        }
+
+        return { status, ndc, outputName, outputFlag, rxCui };
+    }
+
+
+    
+    // Function to handle fetching and displaying NDC details
+    
+    async function handleNdcDetails(columnIndex) {
+        const table = document.querySelector('#parsedTable');
+        const tbody = table.querySelector('tbody');
+        const thead = table.querySelector('thead');
+        let headerRow = thead.querySelector('tr');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+        // Check if new headers need to be added
+        if (headerRow.cells.length === rows[0].cells.length) {
+            const headers = ['NDC Brand Indicator', 'NDC Concept Name', 'NDC RXCUI'];
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+        }
+
+        // Use Promise.all to handle all asynchronous operations
+        await Promise.all(rows.map(async (row) => {
+            const ndcCode = row.cells[columnIndex].textContent.trim();
+            const result = await getNdcDetails(ndcCode);
+            const dataToAdd = [result.outputFlag, result.outputName, result.rxCui];
+            dataToAdd.forEach(data => {
+                const td = document.createElement('td');
+                td.textContent = data;
+                row.appendChild(td);
+            });
+        }));
+
+        // Call updateColumnSelect after all rows have been processed
+        updateColumnSelect();
+    }
+
+
+
+    // Function to update column select dropdown based on parsed headers
+    function updateColumnSelect() {
+        var columnSelect = document.getElementById('columnSelect');
+        var headers = document.querySelectorAll('#parsedTable th'); // Exclude transformation dropdowns
+        columnSelect.innerHTML = '';
+        headers.forEach((header, index) => {
+            var option = document.createElement('option');
+            option.value = index;
+            option.textContent = header.textContent.split('\n')[0]; // Get text before newline if any
+            columnSelect.appendChild(option);
+        });
+    }
+
+    // Function to apply filter based on selected column, condition, and value
+    function applyFilter() {
+        var columnSelect = document.getElementById('columnSelect');
+        var columnIndex = columnSelect.value;
+        var conditionSelect = document.getElementById('conditionSelect');
+        var condition = conditionSelect.value;
+        var valueInput = document.getElementById('valueInput');
+        var filterValue = valueInput.value.toLowerCase();
+
+        var rows = document.querySelectorAll('#parsedTable tbody tr');
+        rows.forEach(row => {
+            var cell = row.cells[columnIndex];
+            var cellValue = cell.textContent.toLowerCase();
+            var match = false;
+
+            switch (condition) {
+                case 'contains':
+                    match = cellValue.includes(filterValue);
+                    break;
+                case 'doesNotContain':
+                    match = !cellValue.includes(filterValue);
+                    break;
+                case 'equals':
+                    match = cellValue === filterValue;
+                    break;
+                case 'notEqual':
+                    match = cellValue !== filterValue;
+                    break;
+                case 'isNull':
+                    match = cellValue === '';
+                    break;
+                case 'isNotNull':
+                    match = cellValue !== '';
+                    break;
+            }
+
+            row.style.display = match ? '' : 'none'; // Show or hide the row
+        });
+    }
+    // Listen for paste event on the container
+    document.getElementById('container').addEventListener('paste', function (event) {
+        // Prevent default paste behavior
+        event.preventDefault();
+
+        // Get pasted data
+        var clipboardData = event.clipboardData || window.clipboardData;
+        var pastedData = clipboardData.getData('text');
+
+        // Parse pasted data into a table
+        parsePastedData(pastedData);
+        updateColumnSelect();
+        
+    });
+</script>
+
+</body>
+</html>
