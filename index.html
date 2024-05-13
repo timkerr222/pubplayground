@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Paste Cells</title>
 <style>
+    #container{
+        height: 400px;
+    }
     /* Styling for the container */
     #container, #filterContainer {
         width: 100%;
@@ -31,6 +34,7 @@
 </head>
 <body>
 
+<div>Paste Cells Here.... </div>
 <div id="container" contenteditable="true" placeholder="Paste cells here"></div>
 
 <label for="hasHeaders">Data has headers:</label>
@@ -179,6 +183,7 @@
                 <option value="pad">Pad Cells</option>
                 <option value="ndc">Format Drug NDC</option>
                 <option value="getndcbrand">Get NDC Brand Indicator</option>
+                <option value="getnpi">Get NPI Details</option>
                 <option value="classify">Classify Data</option>
             `;
             select.addEventListener('change', function () {
@@ -186,6 +191,9 @@
                 var selectedOption = this.value;
                 if (selectedOption === 'getndcbrand'){
                     handleNdcDetails(columnIndex);
+                }
+                else if (selectedOption === 'getnpi'){
+                    handleNpiDetails(columnIndex);
                 }
                 else if (selectedOption === 'split') {
                     // Implement logic for splitting cells
@@ -332,6 +340,140 @@
         }));
 
         // Call updateColumnSelect after all rows have been processed
+        updateColumnSelect();
+    }
+
+
+
+    async function getNpiDetails(npi) {
+        const proxyUrl = '';// 'https://cors-anywhere.herokuapp.com/';
+        const url = `https://npiregistry.cms.hhs.gov/api/?number=${npi}&version=2.1`;
+        try {
+            const response = await fetch(proxyUrl + url, {
+                method: 'GET',
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.1.2222.33 Safari/537.36"
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data && data.results && data.results.length > 0) {
+                    const result = data.results[0];
+
+                    // Extract basic details
+                    const last_name = result.basic.last_name;
+                    const first_name = result.basic.first_name;
+                    const middle_name = result.basic.middle_name;
+                    const credential = result.basic.credential;
+                    const gender = result.basic.gender;
+                    const npi_number = result.number;
+
+                    // Extract primary taxonomy
+                    let primary_taxonomy = '';
+                    result.taxonomies.forEach(taxonomy => {
+                        if (taxonomy.primary) {
+                            primary_taxonomy = taxonomy.desc;
+                        }
+                    });
+
+                    // Extract primary address (location)
+                    let primary_address = {};
+                    result.addresses.forEach(address => {
+                        if (address.address_purpose === 'LOCATION') {
+                            primary_address = {
+                                address_1: address.address_1,
+                                city: address.city,
+                                state: address.state,
+                                postal_code: address.postal_code,
+                                country_name: address.country_name,
+                                telephone_number: address.telephone_number,
+                                fax_number: address.fax_number
+                            };
+                        }
+                    });
+
+                    return {
+                        npi_number,
+                        first_name,
+                        middle_name,
+                        last_name,
+                        credential,
+                        gender,
+                        primary_taxonomy,
+                        primary_address
+                    };
+                } else {
+                    return {
+                        npi_number: '',
+                        first_name: '',
+                        middle_name: '',
+                        last_name: '',
+                        credential: '',
+                        gender: '',
+                        primary_taxonomy: '',
+                        primary_address: {}
+                    };
+                }
+
+        } catch (error) {
+            console.error(`Error fetching NPI details for NPI ${npi}:`, error);
+            return { primary_taxonomy: '', last_name: '', first_name: '', npi_number: '' };
+        }
+    }
+
+
+
+    async function handleNpiDetails(columnIndex) {
+        const table = document.querySelector('#parsedTable');
+        const tbody = table.querySelector('tbody');
+        const thead = table.querySelector('thead');
+        let headerRow = thead.querySelector('tr');
+
+        // Fetch all rows from tbody
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+        // Define headers for new data columns
+        const headers = [
+            'NPI Number', 'First Name', 'Middle Name', 'Last Name', 'Credential', 'Gender',
+            'Primary Taxonomy', 'Address 1', 'City', 'State', 'Postal Code', 'Country', 'Phone', 'Fax'
+        ];
+
+        // Add new headers if not already present
+        if (headerRow.cells.length === rows[0].cells.length) {
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+        }
+
+        // Handle data update for each row
+        await Promise.all(rows.map(async (row) => {
+            const npi = row.cells[columnIndex].textContent.trim();
+            const npiDetails = await getNpiDetails(npi);
+
+            const dataToAdd = [
+                npiDetails.npi_number, npiDetails.first_name, npiDetails.middle_name, npiDetails.last_name,
+                npiDetails.credential, npiDetails.gender, npiDetails.primary_taxonomy,
+                npiDetails.primary_address.address_1, npiDetails.primary_address.city,
+                npiDetails.primary_address.state, npiDetails.primary_address.postal_code,
+                npiDetails.primary_address.country_name, npiDetails.primary_address.telephone_number,
+                npiDetails.primary_address.fax_number
+            ];
+
+            dataToAdd.forEach(data => {
+                const td = document.createElement('td');
+                td.textContent = data;
+                row.appendChild(td);
+            });
+        }));
+
+        // Update column select to reflect the new headers
         updateColumnSelect();
     }
 
