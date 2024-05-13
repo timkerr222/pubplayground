@@ -133,7 +133,7 @@
     
     // Function to split cells into two unique columns
         function splitCells(columnIndex, delimiter) {
-            var rows = document.querySelectorAll('#parsedTable tbody tr');
+            var headerRows = document.querySelectorAll('#parsedTable thead tr');
             var newHeaderCell1 = document.createElement('th');
             var newHeaderCell2 = document.createElement('th');
             newHeaderCell1.innerText = `Column_${columnIndex + 1}_1`; // Incrementing columnIndex by 1 to match the one-based indexing
@@ -147,12 +147,13 @@
             var select2 = createSelectDropdown(columnIndex);
             newHeaderCell2.appendChild(select2);
 
-            var header = rows[0];
+            var header = headerRows[0];
             header.appendChild(newHeaderCell1);
             header.appendChild(newHeaderCell2);
 
+            var rows = document.querySelectorAll('#parsedTable tbody tr');
             // Start iterating from the second row onwards
-            for (var i = 1; i < rows.length; i++) {
+            for (var i = 0; i < rows.length; i++) {
                 var row = rows[i];
                 var cells = row.querySelectorAll('td');
                 if (cells.length > columnIndex) {
